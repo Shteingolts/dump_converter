@@ -1,6 +1,12 @@
 """
 A small collection of functions which parse data from lammps dump file
 into a PyTorch Geometric `Data` object and back.
+
+Compared to the previous data parcing pipeline, introduces two extra attribiutes
+into the PyTroch Data object, namely `box` and `atom_ids`, which are needed for
+the lammps trajectory file format.
+
+Intended as a substite for the helpers.py file in the future.
 """
 import numpy as np
 import os
@@ -82,7 +88,7 @@ def assemble_data(
         edge_index=edge_index,
         edge_attr=edge_attr,
         box=box,
-        atom_ids=atom_ids
+        atom_ids=atom_ids,
     )
 
 
@@ -92,7 +98,7 @@ def parse_dump(
     node_features: str = "full",
     skip: int = 1,
 ) -> list[Data]:
-    """Parses a lammps dump file. By default returns only x and y as node features.
+    """Parses a lammps dump file. By default returns x, y, vx, and vy as node features.
 
     Parameters
     ----------
@@ -155,14 +161,15 @@ def parse_dump(
 
         bonds = original_network.bonds
         data_list.append(assemble_data(atoms, bonds, box, node_features=node_features))
-    
+
     return data_list
 
 
 def bulk_load(
     data_dir: str, node_features: str = "full", skip: int = 1
 ) -> list[list[Data]]:
-    """Loads data from a provided directory.
+    """Loads data from a provided directory. By default returns x, y, vx, and vy as node features.
+    Assumes that each directory in the `data_dir` contains a network simulation.
 
     Parameters
     ----------
@@ -199,9 +206,21 @@ def bulk_load(
 
 
 def dump(data: list[Data], filedir: str = "", filename: str = "dump_custom.lammpstrj"):
+    """Writes a lammps trajctory file from the list of PyTorch Geometric
+    Data objects.
+
+    Parameters
+    ----------
+    data : list[Data]
+        list of Data objects to dump into a file as trajectory
+    filedir : str, optional
+        directory to write the output file to, by default ""
+    filename : str, optional
+        output file name, by default "dump_custom.lammpstrj"
+    """
     filepath = os.path.join(filedir, filename)
     print(filepath)
-    with open(filepath, 'w', encoding="utf8") as f:
+    with open(filepath, "w", encoding="utf8") as f:
         for index, data_object in enumerate(data):
             f.write("ITEM: TIMESTEP\n")
             f.write(f"{index}\n")
@@ -211,14 +230,18 @@ def dump(data: list[Data], filedir: str = "", filename: str = "dump_custom.lammp
             f.write(f"{data_object.box.x1} {data_object.box.x2}\n")
             f.write(f"{data_object.box.y1} {data_object.box.y2}\n")
             f.write(f"{data_object.box.z1} {data_object.box.z2}\n")
-            f.write("ITEM: ATOMS id x y z vx vy vz\n") # TODO: make this atoms header dynamic
+            f.write(
+                "ITEM: ATOMS id x y z vx vy vz\n"
+            )  # TODO: make this atoms header dynamic
             for node_index, node in enumerate(data_object.x):
                 atom_line = f"{data_object.atom_ids[node_index]} {node[0]} {node[1]} {0} {node[2]} {node[3]} {0}\n"
                 f.write(atom_line)
 
+
 def bulk_dump(data_dir: str):
-    #TODO: write this function
+    # TODO: write this function
     raise NotImplementedError
+
 
 if __name__ == "__main__":
     example = network.Network.from_data_file(
