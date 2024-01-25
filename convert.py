@@ -10,6 +10,7 @@ Intended as a substite for the helpers.py file in the future.
 """
 import numpy as np
 import os
+from sympy import per
 import torch
 from torch_geometric.data import Data
 
@@ -17,7 +18,7 @@ import network
 
 
 def assemble_data(
-    atoms: list, bonds: list, box: network.Box, node_features: str = "full"
+    atoms: list[network.Atom], bonds: list[network.Bond], box: network.Box, node_features: str = "full"
 ) -> Data:
     """Helper function, part of the `parse_dump()`. Assembles the pytroch_geometric `Data` object.
     By default returns only x and y as node features.
@@ -52,17 +53,15 @@ def assemble_data(
     ]
 
     edge_index = torch.tensor(np.array(edges_with_indices).T)
-    edge_vectors = torch.stack(
-        [
-            torch.tensor([bond.atom1.x - bond.atom2.x, bond.atom1.y - bond.atom2.y])
-            for bond in bonds
-        ]
-    )
+    edge_vectors = [torch.tensor([bond.atom1.x - bond.atom2.x, bond.atom1.y - bond.atom2.y]) for bond in bonds]
+    edge_vectors = torch.stack(edge_vectors)
     edge_lengths = torch.tensor([bond.length for bond in bonds])
+    edge_stiffnesses = torch.tensor([bond.bond_coefficient for bond in bonds])
+    
     # edge vector and its length
     edge_attr = [
-        torch.cat((v, torch.tensor([length])))
-        for v, length in zip(edge_vectors, edge_lengths)
+        torch.cat((v, torch.tensor([length]), torch.tensor([stiffness])))
+        for v, length, stiffness in zip(edge_vectors, edge_lengths, edge_stiffnesses)
     ]
     edge_attr = torch.stack(edge_attr)
 
@@ -147,9 +146,11 @@ def parse_dump(
         atoms = []
         for atom_data in timestep_data[9:]:
             atom_data = atom_data.split()
+            atom_diameter = [atom for atom in original_network.atoms if atom.atom_id == int(atom_data[0])][0].diameter
+            # print(atom_diameter)
             atom = network.Atom(
                 atom_id=int(atom_data[0]),
-                diameter=1.0,
+                diameter=atom_diameter,
                 x=float(atom_data[1]),
                 y=float(atom_data[2]),
                 z=float(atom_data[3]),
@@ -159,7 +160,9 @@ def parse_dump(
             atom.vz = float(atom_data[6])
             atoms.append(atom)
 
-        bonds = original_network.bonds
+        bonds = network.make_bonds(atoms, original_network.box, periodic=True)
+        if not bonds:
+            raise NotImplementedError("bonds are still empty for some reason")
         data_list.append(assemble_data(atoms, bonds, box, node_features=node_features))
 
     return data_list
@@ -186,7 +189,7 @@ def bulk_load(
     ]
 
     data = []
-    for sim in network_sims:
+    for index, sim in enumerate(network_sims):
         # reading network from `coord.dat` instead of `*.lmp` to get the accurate information about periodic bonds
         current_network = network.Network.from_atoms(
             os.path.join(sim, "../", "coord.dat"),
@@ -195,7 +198,7 @@ def bulk_load(
         )
         current_network.write_to_file(os.path.join(sim, "true_network.lmp"))
         dump_file = os.path.join(sim, "dump.lammpstrj")
-        print(dump_file)
+        print(f"{index+1}/{len(network_sims)} : {dump_file}")
         data.append(
             parse_dump(
                 dump_file, current_network, node_features=node_features, skip=skip
