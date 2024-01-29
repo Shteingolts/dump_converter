@@ -1002,7 +1002,6 @@ def make_bonds(atoms: list[Atom], box: Box, periodic: bool) -> list:
 
     extra_bonds = set()
     if periodic:
-
         edge_atom = [atom for atom in atoms if atom.on_edge(box, 2.0)]
         neighbours = make_surrounding(atoms, box)
         edge_neighbors = [atom for atom in neighbours if atom.on_edge(box, 2.0)]

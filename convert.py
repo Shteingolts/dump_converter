@@ -8,6 +8,7 @@ the lammps trajectory file format.
 
 Intended as a substite for the helpers.py file in the future.
 """
+from copy import deepcopy
 import numpy as np
 import os
 from sympy import per
@@ -123,6 +124,8 @@ def parse_dump(
         if "ITEM: TIMESTEP" in line:
             timesteps.append(index)
 
+    original_connections = original_network.bonds
+
     data_list = []
     for i in range(0, len(timesteps) - 1, skip):
         timestep_data = content[timesteps[i] : timesteps[i + 1]]
@@ -160,16 +163,18 @@ def parse_dump(
             atom.vz = float(atom_data[6])
             atoms.append(atom)
 
-        bonds = network.make_bonds(atoms, original_network.box, periodic=True)
-        if not bonds:
-            raise NotImplementedError("bonds are still empty for some reason")
+        new_connections = deepcopy(original_connections)
+        for connection in new_connections:
+            atom1, atom2 = connection.atom1, connection.atom2
+            
+        
         data_list.append(assemble_data(atoms, bonds, box, node_features=node_features))
 
     return data_list
 
 
 def bulk_load(
-    data_dir: str, node_features: str = "full", skip: int = 1
+    data_dir: str, n_networks: int, node_features: str = "full", skip: int = 1
 ) -> list[list[Data]]:
     """Loads data from a provided directory. By default returns x, y, vx, and vy as node features.
     Assumes that each directory in the `data_dir` contains a network simulation.
@@ -205,6 +210,9 @@ def bulk_load(
             )
         )
 
+        # stop loading of desired number of network simulation is parsed
+        if index+1 >= n_networks:
+            break
     return data
 
 
