@@ -124,7 +124,9 @@ def parse_dump(
         if "ITEM: TIMESTEP" in line:
             timesteps.append(index)
 
-    original_connections = original_network.bonds
+    original_network.bonds
+    original_edge_index = [(bond.atom1.atom_id, bond.atom2.atom_id) for bond in original_network.bonds]
+    bond_map = {(bond.atom1.atom_id, bond.atom2.atom_id) : bond for bond in original_network.bonds}
 
     data_list = []
     for i in range(0, len(timesteps) - 1, skip):
@@ -146,7 +148,7 @@ def parse_dump(
         box = network.Box(x1, x2, y1, y2, z1, z2)
 
         # get atoms info
-        atoms = []
+        new_atoms = []
         for atom_data in timestep_data[9:]:
             atom_data = atom_data.split()
             atom_diameter = [atom for atom in original_network.atoms if atom.atom_id == int(atom_data[0])][0].diameter
@@ -161,14 +163,37 @@ def parse_dump(
             atom.vx = float(atom_data[4])
             atom.vy = float(atom_data[5])
             atom.vz = float(atom_data[6])
-            atoms.append(atom)
+            new_atoms.append(atom)
 
-        new_connections = deepcopy(original_connections)
-        for connection in new_connections:
-            atom1, atom2 = connection.atom1, connection.atom2
+        new_atom_map = {atom.atom_id : atom for atom in new_atoms}
+        new_bonds = []
+        for edge_index in original_edge_index:
+            id1, id2 = edge_index[0], edge_index[1]
+            new_atom1 = new_atom_map[id1]
+            new_atom2 = new_atom_map[id2]
+            old_stiffness = bond_map[(id1, id2)].bond_coefficient
             
-        
-        data_list.append(assemble_data(atoms, bonds, box, node_features=node_features))
+            # ensure that the two atoms are located close to each other
+            if abs(new_atom1.x - new_atom2.x) > original_network.box.x:
+                real_x1 = min(new_atom1.x, new_atom2.x) + abs(new_atom1.x - new_atom2.x)
+                real_x2 = max(new_atom1.x, new_atom2.x)
+            else:
+                real_x1 = new_atom1.x
+                real_x2 = new_atom2.x
+            if abs(new_atom1.y - new_atom2.y) > original_network.box.y:
+                real_y1 = min(new_atom1.y, new_atom2.y) + abs(new_atom1.y - new_atom2.y)
+                real_y2 = max(new_atom1.y, new_atom2.y)
+            else:
+                real_y1 = new_atom1.y
+                real_y2 = new_atom2.y
+            
+            new_length = ((real_x2-real_x1)**2 + (real_y2-real_y1)**2)**0.5
+            new_bond = network.Bond(new_atom1, new_atom2)
+            new_bond.length = new_length
+            new_bond.bond_coefficient = old_stiffness
+            new_bonds.append(new_bond)
+            
+        data_list.append(assemble_data(new_atoms, new_bonds, box, node_features=node_features))
 
     return data_list
 
