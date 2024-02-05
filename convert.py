@@ -174,15 +174,15 @@ def parse_dump(
             old_stiffness = bond_map[(id1, id2)].bond_coefficient
             
             # ensure that the two atoms are located close to each other
-            if abs(new_atom1.x - new_atom2.x) > original_network.box.x:
-                real_x1 = min(new_atom1.x, new_atom2.x) + abs(new_atom1.x - new_atom2.x)
+            if abs(new_atom1.x - new_atom2.x) > original_network.box.x / 2:
                 real_x2 = max(new_atom1.x, new_atom2.x)
+                real_x1 = min(new_atom1.x, new_atom2.x) + original_network.box.x
             else:
                 real_x1 = new_atom1.x
                 real_x2 = new_atom2.x
-            if abs(new_atom1.y - new_atom2.y) > original_network.box.y:
-                real_y1 = min(new_atom1.y, new_atom2.y) + abs(new_atom1.y - new_atom2.y)
+            if abs(new_atom1.y - new_atom2.y) > original_network.box.y / 2:
                 real_y2 = max(new_atom1.y, new_atom2.y)
+                real_y1 = min(new_atom1.y, new_atom2.y) + original_network.box.y
             else:
                 real_y1 = new_atom1.y
                 real_y2 = new_atom2.y
