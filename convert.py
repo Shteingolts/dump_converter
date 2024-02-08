@@ -168,7 +168,7 @@ def parse_dump(
             # print(atom_diameter)
             atom = network.Atom(
                 atom_id=int(atom_data[0]),
-                diameter=atom_diameter,
+                atom_diameter=atom_diameter,
                 x=float(atom_data[1]),
                 y=float(atom_data[2]),
                 z=float(atom_data[3]),
